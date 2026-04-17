@@ -7,6 +7,8 @@ from datetime import datetime
 import os
 import sqlite3
 import json
+import yaml
+from yaml.loader import SafeLoader
 
 from data_sources.google_trends import GoogleTrendsCollector
 from data_sources.rozetka_scraper import RozetkaScraper
@@ -21,73 +23,9 @@ except ImportError:
     APIFY_AVAILABLE = False
 
 # =============================================
-# CONFIG
+# CONSTANTS
 # =============================================
-import yaml
-from yaml.loader import SafeLoader
-
-st.set_page_config(
-    page_title="UA Market Trends",
-    page_icon="\U0001f4ca",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-# --- AUTH ---
-def check_password():
-    if st.session_state.get("authenticated"):
-        return True
-
-    st.markdown("## \U0001f512 \u0412\u0445\u0456\u0434")
-    username = st.text_input("\u041b\u043e\u0433\u0456\u043d", key="login_user")
-    password = st.text_input("\u041f\u0430\u0440\u043e\u043b\u044c", type="password", key="login_pass")
-
-    if st.button("\u0412\u0432\u0456\u0439\u0442\u0438", key="login_btn"):
-        config_path = "config_auth.yaml"
-        if os.path.exists(config_path):
-            with open(config_path, encoding="utf-8") as f:
-                cfg = yaml.load(f, Loader=SafeLoader)
-            users = cfg.get("credentials", {}).get("usernames", {})
-            user_data = users.get(username)
-            if user_data:
-                import bcrypt
-                if bcrypt.checkpw(password.encode(), user_data["password"].encode()):
-                    st.session_state["authenticated"] = True
-                    st.session_state["name"] = user_data.get("name", username)
-                    st.rerun()
-                else:
-                    st.error("\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c")
-            else:
-                st.error("\u041a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430 \u043d\u0435 \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u043e")
-    return False
-
-if not check_password():
-    st.stop()
-
-st.sidebar.write(f'\u041f\u0440\u0438\u0432\u0456\u0442, **{st.session_state.get("name", "")}**')
-if st.sidebar.button("\u0412\u0438\u0439\u0442\u0438"):
-    st.session_state["authenticated"] = False
-    st.rerun()
-# --- END AUTH ---
-
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.2rem; font-weight: 700; text-align: center;
-        padding: 0.8rem 0;
-        background: linear-gradient(90deg, #0057b7 0%, #ffd700 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    .stat-box {
-        background: #1e1e2e; border-radius: 12px; padding: 1.2rem;
-        text-align: center; border: 1px solid #333;
-    }
-    .stat-box h2 { margin: 0; font-size: 2rem; color: #ffd700; }
-    .stat-box p { margin: 0; color: #aaa; font-size: 0.85rem; }
-    div[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
-    }
-</style>
-""", unsafe_allow_html=True)
+DB_PATH = "data/trends.db"
 
 CATEGORIES = {
     "🍽 Їжа та алкоголь (все)": "food",
@@ -103,18 +41,65 @@ CATEGORIES = {
     "🔋 Зарядні станції": "energy",
 }
 
-PERIOD_MAP = {
-    "\u041e\u0441\u0442\u0430\u043d\u043d\u0456 7 \u0434\u043d\u0456\u0432": "now 7-d",
-    "\u041e\u0441\u0442\u0430\u043d\u043d\u0456 30 \u0434\u043d\u0456\u0432": "today 1-m",
-    "\u041e\u0441\u0442\u0430\u043d\u043d\u0456 90 \u0434\u043d\u0456\u0432": "today 3-m",
-    "\u041e\u0441\u0442\u0430\u043d\u043d\u0456 6 \u043c\u0456\u0441\u044f\u0446\u0456\u0432": "today 6-m",
-    "\u041e\u0441\u0442\u0430\u043d\u043d\u0456\u0439 \u0440\u0456\u043a": "today 12-m",
+# Маппінг код → українська назва (використовується всюди)
+CAT_LABELS = {
+    "food": "🍽 Їжа та алкоголь",
+    "alcohol": "🥃 Алкоголь",
+    "grocery": "🛒 Продукти",
+    "chemistry": "🧴 Побут. хімія",
+    "home": "🏠 Дім",
+    "cosmetics": "💄 Косметика",
+    "electronics": "📱 Електроніка",
+    "kids": "👶 Дитячі",
+    "pets": "🐾 Зоотовари",
+    "health": "💊 Здоров'я",
+    "energy": "🔋 Зарядні",
+    "other": "📦 Інше",
+    "mixed": "📦 Змішане",
 }
 
-DB_PATH = "data/trends.db"
+PERIOD_MAP = {
+    "Останні 7 днів": "now 7-d",
+    "Останні 30 днів": "today 1-m",
+    "Останні 90 днів": "today 3-m",
+    "Останні 6 місяців": "today 6-m",
+    "Останній рік": "today 12-m",
+}
 
 
+def cat_label(code):
+    """Переводить код категорії в українську назву."""
+    return CAT_LABELS.get(code, code)
 
+
+# =============================================
+# AUTH
+# =============================================
+def check_password():
+    if st.session_state.get("authenticated"):
+        return True
+    st.markdown("## 🔐 Вхід в систему")
+    st.caption("UA Market Trends Analyzer")
+    username = st.text_input("Логін", key="login_user")
+    password = st.text_input("Пароль", type="password", key="login_pass")
+    if st.button("Ввійти", key="login_btn", type="primary", use_container_width=True):
+        config_path = "config_auth.yaml"
+        if os.path.exists(config_path):
+            with open(config_path, encoding="utf-8") as f:
+                cfg = yaml.load(f, Loader=SafeLoader)
+            users = cfg.get("credentials", {}).get("usernames", {})
+            user_data = users.get(username)
+            if user_data:
+                import bcrypt
+                if bcrypt.checkpw(password.encode(), user_data["password"].encode()):
+                    st.session_state["authenticated"] = True
+                    st.session_state["name"] = user_data.get("name", username)
+                    st.rerun()
+                else:
+                    st.error("Невірний пароль")
+            else:
+                st.error("Користувача не знайдено")
+    return False
 # =============================================
 # LOCAL DATA CACHE
 # =============================================
@@ -221,50 +206,88 @@ def save_products_to_cache(df, source):
 # MAIN
 # =============================================
 def main():
-    st.set_page_config(page_title="UA Market Trends", page_icon="\U0001f1fa\U0001f1e6", layout="wide")
+    st.set_page_config(
+        page_title="UA Market Trends",
+        page_icon="🇺🇦",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+
+    # --- Глобальні стилі ---
+    st.markdown("""
+    <style>
+        .main-header {
+            font-size: 2rem; font-weight: 700; text-align: center;
+            padding: 0.5rem 0; margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #0057b7 0%, #ffd700 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        div[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+        }
+        div[data-testid="stSidebar"] .stRadio > label {
+            font-size: 1.05rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
     if not check_password():
         st.stop()
-    st.markdown(
-        '<p class="main-header">\U0001f1fa\U0001f1e6 UA Market Trends Analyzer</p>',
-        unsafe_allow_html=True
-    )
 
-
-    # SIDEBAR
+    # --- SIDEBAR ---
     with st.sidebar:
-        st.image("https://flagcdn.com/w320/ua.png", width=50)
+        st.markdown(
+            '<p class="main-header">🇺🇦 UA Market Trends</p>',
+            unsafe_allow_html=True
+        )
+        st.caption(f"👤 {st.session_state.get('name', '')}")
+
+        if st.button("🚪 Вийти", use_container_width=True):
+            st.session_state["authenticated"] = False
+            st.rerun()
+
+        st.divider()
 
         # Cache stats
         stats = get_cache_stats()
-        st.markdown(
-            "\U0001f4be **\u041a\u0435\u0448:** {} \u0442\u043e\u0432\u0430\u0440\u0456\u0432 | "
-            "\u041e\u043d\u043e\u0432\u043b\u0435\u043d\u043e: {}".format(
-                stats["products"], stats["last_update"]
+        if stats["products"] > 0:
+            st.success(
+                f"📦 **{stats['products']}** товарів\n\n"
+                f"🕐 {stats['last_update']}"
             )
-        )
+        else:
+            st.warning("📦 База порожня")
+
         st.divider()
 
         page = st.radio(
-            "\U0001f4cb \u0420\u043e\u0437\u0434\u0456\u043b:",
+            "📋 Розділ:",
             [
-                "\U0001f680 \u0417\u0456\u0431\u0440\u0430\u0442\u0438 \u0434\u0430\u043d\u0456",
-                "\U0001f4ca \u0410\u043d\u0430\u043b\u0456\u0442\u0438\u043a\u0430 \u0442\u043e\u0432\u0430\u0440\u0456\u0432",
-                "\U0001f4c8 \u0422\u0440\u0435\u043d\u0434\u0438 Google",
-                "\U0001f4a1 \u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0456\u0457",
-                "\U0001f4e5 \u0415\u043a\u0441\u043f\u043e\u0440\u0442 \u0434\u0430\u043d\u0438\u0445",
-            ]
+                "🚀 Зібрати дані",
+                "📊 Аналітика товарів",
+                "📈 Тренди Google",
+                "💡 Рекомендації",
+                "📥 Експорт даних",
+            ],
+            label_visibility="collapsed",
         )
 
-    if page.startswith("\U0001f680"):
+    # --- HEADER ---
+    st.markdown(
+        '<p class="main-header">🇺🇦 UA Market Trends Analyzer</p>',
+        unsafe_allow_html=True
+    )
+
+    # --- ROUTING ---
+    if page.startswith("🚀"):
         page_collect()
-    elif page.startswith("\U0001f4ca"):
+    elif page.startswith("📊"):
         page_analytics()
-    elif page.startswith("\U0001f4c8"):
+    elif page.startswith("📈"):
         page_trends()
-    elif page.startswith("\U0001f4a1"):
+    elif page.startswith("💡"):
         page_recommendations()
-    elif page.startswith("\U0001f4e5"):
+    elif page.startswith("📥"):
         page_export()
 
 
@@ -520,16 +543,19 @@ def page_analytics():
         # Фільтри для гарячих
         fh1, fh2, fh3 = st.columns(3)
         with fh1:
-            hot_cats = ["(всі)"] + sorted(scored_df["category"].unique().tolist())
-            hot_cat = st.selectbox("Категорія:", hot_cats, key="hot_cat")
+            hot_cat_codes = sorted(scored_df["category"].unique().tolist())
+            hot_cat_options = ["(всі)"] + [cat_label(c) for c in hot_cat_codes]
+            hot_cat_selected = st.selectbox("Категорія:", hot_cat_options, key="hot_cat")
         with fh2:
             hot_n = st.select_slider("Кількість:", options=[10, 20, 50, 100], value=20, key="hot_n")
         with fh3:
             min_reviews = st.number_input("Мін. відгуків:", min_value=0, value=5, step=5, key="hot_minrev")
 
         hot_df = scored_df.copy()
-        if hot_cat != "(всі)":
-            hot_df = hot_df[hot_df["category"] == hot_cat]
+        if hot_cat_selected != "(всі)":
+            # Знаходимо код за лейблом
+            reverse_map = {cat_label(c): c for c in hot_cat_codes}
+            hot_df = hot_df[hot_df["category"] == reverse_map.get(hot_cat_selected, "")]
         hot_df = hot_df[hot_df["reviews_count"] >= min_reviews]
         hot_df = hot_df.head(hot_n)
 
@@ -1039,8 +1065,17 @@ def render_table(df):
                     "rating", "reviews_count", "brand", "category", "rozetka_category", "source"]
     show_cols = [c for c in display_cols if c in page_df.columns]
 
+    display_cols = ["name", "trend_score", "trend_label", "price", "old_price",
+                    "rating", "reviews_count", "brand", "category", "rozetka_category", "source"]
+    show_cols = [c for c in display_cols if c in page_df.columns]
+
+    # Перекладаємо категорії
+    display_df = page_df[show_cols].copy()
+    if "category" in display_df.columns:
+        display_df["category"] = display_df["category"].map(lambda x: cat_label(x))
+
     st.dataframe(
-        page_df[show_cols],
+        display_df,
         use_container_width=True,
         height=600,
         column_config={
