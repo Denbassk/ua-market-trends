@@ -23,12 +23,41 @@ except ImportError:
 # =============================================
 # CONFIG
 # =============================================
+import yaml
+from yaml.loader import SafeLoader
+import streamlit_authenticator as stauth
+
 st.set_page_config(
     page_title="UA Market Trends",
     page_icon="\U0001f4ca",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+# --- AUTH ---
+config_path = "config_auth.yaml"
+if os.path.exists(config_path):
+    with open(config_path, encoding="utf-8") as f:
+        config = yaml.load(f, Loader=SafeLoader)
+
+    authenticator = stauth.Authenticate(
+        config["credentials"],
+        config["cookie"]["name"],
+        config["cookie"]["key"],
+        config["cookie"]["expiry_days"],
+    )
+
+    authenticator.login()
+
+    if not st.session_state.get("authentication_status"):
+        if st.session_state.get("authentication_status") is False:
+            st.error("\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043b\u043e\u0433\u0456\u043d/\u043f\u0430\u0440\u043e\u043b\u044c")
+        else:
+            st.warning("\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043b\u043e\u0433\u0456\u043d \u0442\u0430 \u043f\u0430\u0440\u043e\u043b\u044c")
+        st.stop()
+
+    authenticator.logout("\u0412\u0438\u0439\u0442\u0438", "sidebar")
+    st.sidebar.write(f'\u041f\u0440\u0438\u0432\u0456\u0442, **{st.session_state.get("name", "")}**')
+# --- END AUTH ---
 
 st.markdown("""
 <style>
@@ -71,6 +100,34 @@ PERIOD_MAP = {
 
 DB_PATH = "data/trends.db"
 
+
+
+def check_auth():
+    """Returns True if user is authenticated."""
+    # Load config
+    config_path = "config_auth.yaml"
+    with open(config_path, encoding="utf-8") as f:
+        config = yaml.load(f, Loader=SafeLoader)
+
+    authenticator = stauth.Authenticate(
+        config["credentials"],
+        config["cookie"]["name"],
+        config["cookie"]["key"],
+        config["cookie"]["expiry_days"],
+    )
+
+    authenticator.login()
+
+    if st.session_state.get("authentication_status"):
+        authenticator.logout("\u0412\u0438\u0439\u0442\u0438", "sidebar")
+        st.sidebar.write(f'\u041f\u0440\u0438\u0432\u0456\u0442, **{st.session_state["name"]}**')
+        return True
+    elif st.session_state.get("authentication_status") is False:
+        st.error("\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043b\u043e\u0433\u0456\u043d/\u043f\u0430\u0440\u043e\u043b\u044c")
+        return False
+    else:
+        st.warning("\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043b\u043e\u0433\u0456\u043d \u0442\u0430 \u043f\u0430\u0440\u043e\u043b\u044c")
+        return False
 
 # =============================================
 # LOCAL DATA CACHE
@@ -149,10 +206,39 @@ def save_products_to_cache(df, source):
 # MAIN
 # =============================================
 def main():
+    st.set_page_config(page_title="UA Market Trends", page_icon="\U0001f1fa\U0001f1e6", layout="wide")
+
+    if not check_auth():
+        st.stop()
     st.markdown(
         '<p class="main-header">\U0001f1fa\U0001f1e6 UA Market Trends Analyzer</p>',
         unsafe_allow_html=True
     )
+# --- AUTH ---
+config_path = "config_auth.yaml"
+if os.path.exists(config_path):
+    with open(config_path, encoding="utf-8") as f:
+        config = yaml.load(f, Loader=SafeLoader)
+
+    authenticator = stauth.Authenticate(
+        config["credentials"],
+        config["cookie"]["name"],
+        config["cookie"]["key"],
+        config["cookie"]["expiry_days"],
+    )
+
+    authenticator.login()
+
+    if not st.session_state.get("authentication_status"):
+        if st.session_state.get("authentication_status") is False:
+            st.error("\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043b\u043e\u0433\u0456\u043d/\u043f\u0430\u0440\u043e\u043b\u044c")
+        else:
+            st.warning("\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043b\u043e\u0433\u0456\u043d \u0442\u0430 \u043f\u0430\u0440\u043e\u043b\u044c")
+        st.stop()
+
+    authenticator.logout("\u0412\u0438\u0439\u0442\u0438", "sidebar")
+    st.sidebar.write(f'\u041f\u0440\u0438\u0432\u0456\u0442, **{st.session_state.get("name", "")}**')
+# --- END AUTH ---
 
     # SIDEBAR
     with st.sidebar:
@@ -197,15 +283,32 @@ def main():
 def page_collect():
     st.header("\U0001f680 \u0417\u0431\u0456\u0440 \u0434\u0430\u043d\u0438\u0445")
 
+    # Cache info
+    stats = get_cache_stats()
+    if stats["products"] > 0:
+        st.success(
+            "\U0001f4be \u0423 \u0431\u0430\u0437\u0456 \u0432\u0436\u0435 \u0454 **{} \u0442\u043e\u0432\u0430\u0440\u0456\u0432** "
+            "(\u043e\u043d\u043e\u0432\u043b\u0435\u043d\u043e {}). "
+            "\u041c\u043e\u0436\u0435\u0442\u0435 \u043f\u0435\u0440\u0435\u0439\u0442\u0438 \u0434\u043e "
+            "'\u0410\u043d\u0430\u043b\u0456\u0442\u0438\u043a\u0430' \u0431\u0435\u0437 \u043d\u043e\u0432\u043e\u0433\u043e \u0437\u0431\u043e\u0440\u0443.".format(
+                stats["products"], stats["last_update"]
+            )
+        )
+
     st.info(
-        "\U0001f4a1 **\u041f\u043e\u0440\u0430\u0434\u0430:** \u0414\u0430\u043d\u0456 \u0437\u0431\u0435\u0440\u0456\u0433\u0430\u044e\u0442\u044c\u0441\u044f "
-        "\u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e. \u0417\u0431\u0438\u0440\u0430\u0439\u0442\u0435 1-2 \u0440\u0430\u0437\u0438 "
-        "\u043d\u0430 \u0442\u0438\u0436\u0434\u0435\u043d\u044c \u0449\u043e\u0431 \u0435\u043a\u043e\u043d\u043e\u043c\u0438\u0442\u0438 "
-        "\u043b\u0456\u043c\u0456\u0442\u0438 Apify. "
-        "\u0410\u043d\u0430\u043b\u0456\u0437\u0443\u0439\u0442\u0435 \u0431\u0435\u0437 \u043e\u0431\u043c\u0435\u0436\u0435\u043d\u044c "
-        "\u0443 \u0440\u043e\u0437\u0434\u0456\u043b\u0456 '\u0410\u043d\u0430\u043b\u0456\u0442\u0438\u043a\u0430'."
+        "\U0001f4a1 **\u042f\u043a \u0447\u0430\u0441\u0442\u043e \u0437\u0431\u0438\u0440\u0430\u0442\u0438:**\n\n"
+        "- **Rozetka/Prom.ua:** 1-2 \u0440\u0430\u0437\u0438 \u043d\u0430 \u043c\u0456\u0441\u044f\u0446\u044c "
+        "(\u0446\u0456\u043d\u0438 \u0442\u0430 \u0430\u0441\u043e\u0440\u0442\u0438\u043c\u0435\u043d\u0442 "
+        "\u0437\u043c\u0456\u043d\u044e\u044e\u0442\u044c\u0441\u044f \u043f\u043e\u0432\u0456\u043b\u044c\u043d\u043e)\n\n"
+        "- **Google Trends:** 1 \u0440\u0430\u0437 \u043d\u0430 \u0442\u0438\u0436\u0434\u0435\u043d\u044c "
+        "(\u0434\u043b\u044f \u0432\u0456\u0434\u0441\u0442\u0435\u0436\u0435\u043d\u043d\u044f \u0441\u0435\u0437\u043e\u043d\u043d\u043e\u0441\u0442\u0456)\n\n"
+        "- **100-200 \u0442\u043e\u0432\u0430\u0440\u0456\u0432 \u043d\u0430 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e** "
+        "\u2014 \u0434\u043e\u0441\u0442\u0430\u0442\u043d\u044c\u043e \u0434\u043b\u044f \u0430\u043d\u0430\u043b\u0456\u0437\u0443"
     )
 
+    st.divider()
+
+    # --- Settings ---
     col1, col2 = st.columns(2)
 
     with col1:
@@ -215,12 +318,41 @@ def page_collect():
             default=[list(CATEGORIES.keys())[0], list(CATEGORIES.keys())[1]]
         )
 
-    with col2:
         time_period = st.selectbox(
             "\U0001f4c5 \u041f\u0435\u0440\u0456\u043e\u0434 (Google Trends):",
             list(PERIOD_MAP.keys()), index=1
         )
 
+    with col2:
+        max_products = st.select_slider(
+            "\U0001f4e6 \u041c\u0430\u043a\u0441. \u0442\u043e\u0432\u0430\u0440\u0456\u0432 \u043d\u0430 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e:",
+            options=[20, 50, 100, 200, 500],
+            value=50,
+            help="\u0411\u0456\u043b\u044c\u0448\u0435 \u0442\u043e\u0432\u0430\u0440\u0456\u0432 = "
+                 "\u0431\u0456\u043b\u044c\u0448\u0435 \u0447\u0430\u0441\u0443 \u0442\u0430 \u043b\u0456\u043c\u0456\u0442\u0456\u0432 Apify"
+        )
+
+        max_keywords = st.select_slider(
+            "\U0001f50d Google Trends \u0437\u0430\u043f\u0438\u0442\u0456\u0432 \u043d\u0430 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e:",
+            options=[1, 2, 3, 5],
+            value=2,
+        )
+
+    # --- Estimated cost ---
+    n_cats = len(selected)
+    est_products = n_cats * max_products
+    est_cost_apify = n_cats * 0.5  # ~$0.50 per category on Rozetka scraper
+    st.markdown(
+        "\U0001f4b0 **\u041e\u0446\u0456\u043d\u043a\u0430:** ~{} \u0442\u043e\u0432\u0430\u0440\u0456\u0432, "
+        "~${:.2f} Apify \u043a\u0440\u0435\u0434\u0438\u0442\u0456\u0432, "
+        "~{} \u0445\u0432 \u0447\u0430\u0441\u0443".format(
+            est_products, est_cost_apify, max(1, n_cats * 1)
+        )
+    )
+
+    st.divider()
+
+    # --- Sources ---
     st.subheader("\U0001f50d \u0414\u0436\u0435\u0440\u0435\u043b\u0430")
 
     c1, c2, c3 = st.columns(3)
@@ -239,8 +371,11 @@ def page_collect():
         saved_token = ""
 
     use_apify = st.checkbox(
-        "\U0001f511 Apify (real-time \u0434\u0430\u043d\u0456 \u0437 \u043c\u0430\u0440\u043a\u0435\u0442\u043f\u043b\u0435\u0439\u0441\u0456\u0432)",
-        value=bool(saved_token)
+        "\U0001f511 Apify",
+        value=bool(saved_token),
+        help="\u0420\u0435\u0430\u043b\u044c\u043d\u0456 \u0434\u0430\u043d\u0456 \u0437 "
+             "\u043c\u0430\u0440\u043a\u0435\u0442\u043f\u043b\u0435\u0439\u0441\u0456\u0432. "
+             "\u0411\u0435\u0437 Apify \u2014 \u0434\u0430\u043d\u0456 \u0437 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u043a\u0435\u0448\u0443."
     )
     apify_token = saved_token
     if use_apify and not saved_token:
@@ -255,10 +390,11 @@ def page_collect():
         type="primary", use_container_width=True
     ):
         do_collect(selected, PERIOD_MAP[time_period],
-                   use_gt, use_roz, use_prom, use_apify, apify_token)
+                   use_gt, use_roz, use_prom, use_apify, apify_token,
+                   max_products, max_keywords)
 
-
-def do_collect(selected, period, use_gt, use_roz, use_prom, use_apify, apify_token):
+def do_collect(selected, period, use_gt, use_roz, use_prom,
+               use_apify, apify_token, max_products=50, max_keywords=2):
     db = Database()
     codes = [CATEGORIES[c] for c in selected]
 
@@ -273,24 +409,22 @@ def do_collect(selected, period, use_gt, use_roz, use_prom, use_apify, apify_tok
     # Google Trends
     gt_data = pd.DataFrame()
     if use_gt and codes:
-        progress.progress(10, text="\U0001f4e1 Google Trends...")
-        if apify:
-            gt_data = apify.get_google_trends(codes, geo="UA", timeframe=period)
-        if gt_data.empty:
-            gt = GoogleTrendsCollector()
-            gt_data = gt.get_trends_for_categories(codes, geo="UA", timeframe=period)
+        progress.progress(10, text="\U0001f4e1 Google Trends ({} \u0437\u0430\u043f\u0438\u0442\u0456\u0432 \u043d\u0430 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e)...".format(max_keywords))
+        gt = GoogleTrendsCollector()
+        gt.MAX_KEYWORDS = max_keywords  # Pass limit to collector
+        gt_data = gt.get_trends_for_categories(codes, geo="UA", timeframe=period)
         if not gt_data.empty:
             db.save_trends(gt_data, "google_trends")
 
     # Rozetka
     roz_data = pd.DataFrame()
     if use_roz:
-        progress.progress(40, text="\U0001f6d2 Rozetka...")
+        progress.progress(40, text="\U0001f6d2 Rozetka (\u043c\u0430\u043a\u0441 {} \u0442\u043e\u0432\u0430\u0440\u0456\u0432/\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e)...".format(max_products))
         if apify:
-            roz_data = apify.get_rozetka_products(codes)
+            roz_data = apify.get_rozetka_products(codes, max_per_category=max_products)
         if roz_data.empty:
             roz = RozetkaScraper()
-            roz_data = roz.get_top_products(codes)
+            roz_data = roz.get_top_products(codes, max_per_category=max_products)
         if not roz_data.empty:
             save_products_to_cache(roz_data, "rozetka")
 
@@ -299,16 +433,15 @@ def do_collect(selected, period, use_gt, use_roz, use_prom, use_apify, apify_tok
     if use_prom:
         progress.progress(70, text="\U0001f6d2 Prom.ua...")
         if apify:
-            prom_data = apify.get_prom_products(codes)
+            prom_data = apify.get_prom_products(codes, max_per_category=max_products)
         if prom_data.empty:
             prom = PromScraper()
-            prom_data = prom.get_top_products(codes)
+            prom_data = prom.get_top_products(codes, max_per_category=max_products)
         if not prom_data.empty:
             save_products_to_cache(prom_data, "prom")
 
     progress.progress(100, text="\u2705 \u0413\u043e\u0442\u043e\u0432\u043e!")
 
-    # Summary
     st.divider()
     st.subheader("\U0001f4ca \u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 \u0437\u0431\u043e\u0440\u0443")
 
@@ -324,12 +457,11 @@ def do_collect(selected, period, use_gt, use_roz, use_prom, use_apify, apify_tok
     total = len(roz_data) + len(prom_data)
     st.success(
         "\u2705 \u0417\u0456\u0431\u0440\u0430\u043d\u043e {} \u0442\u043e\u0432\u0430\u0440\u0456\u0432. "
-        "\u041f\u0435\u0440\u0435\u0439\u0434\u0456\u0442\u044c \u0443 \u0440\u043e\u0437\u0434\u0456\u043b "
+        "\u041f\u0435\u0440\u0435\u0439\u0434\u0456\u0442\u044c \u0443 "
         "'\u0410\u043d\u0430\u043b\u0456\u0442\u0438\u043a\u0430 \u0442\u043e\u0432\u0430\u0440\u0456\u0432' "
         "\u0434\u043b\u044f \u0430\u043d\u0430\u043b\u0456\u0437\u0443.".format(total)
     )
 
-    # Store in session for quick access
     st.session_state["gt_data"] = gt_data
     st.session_state["roz_data"] = roz_data
     st.session_state["prom_data"] = prom_data
