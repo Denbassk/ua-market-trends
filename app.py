@@ -112,33 +112,6 @@ DB_PATH = "data/trends.db"
 
 
 
-def check_auth():
-    """Returns True if user is authenticated."""
-    # Load config
-    config_path = "config_auth.yaml"
-    with open(config_path, encoding="utf-8") as f:
-        config = yaml.load(f, Loader=SafeLoader)
-
-    authenticator = stauth.Authenticate(
-        config["credentials"],
-        config["cookie"]["name"],
-        config["cookie"]["key"],
-        config["cookie"]["expiry_days"],
-    )
-
-    authenticator.login()
-
-    if st.session_state.get("authentication_status"):
-        authenticator.logout("\u0412\u0438\u0439\u0442\u0438", "sidebar")
-        st.sidebar.write(f'\u041f\u0440\u0438\u0432\u0456\u0442, **{st.session_state["name"]}**')
-        return True
-    elif st.session_state.get("authentication_status") is False:
-        st.error("\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043b\u043e\u0433\u0456\u043d/\u043f\u0430\u0440\u043e\u043b\u044c")
-        return False
-    else:
-        st.warning("\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043b\u043e\u0433\u0456\u043d \u0442\u0430 \u043f\u0430\u0440\u043e\u043b\u044c")
-        return False
-
 # =============================================
 # LOCAL DATA CACHE
 # =============================================
@@ -218,7 +191,7 @@ def save_products_to_cache(df, source):
 def main():
     st.set_page_config(page_title="UA Market Trends", page_icon="\U0001f1fa\U0001f1e6", layout="wide")
 
-    if not check_auth():
+    if not check_password():
         st.stop()
     st.markdown(
         '<p class="main-header">\U0001f1fa\U0001f1e6 UA Market Trends Analyzer</p>',
