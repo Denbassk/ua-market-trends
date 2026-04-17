@@ -380,7 +380,11 @@ def do_collect(selected, period, use_gt, use_roz, use_prom,
     if use_roz:
         progress.progress(40, text="\U0001f6d2 Rozetka (\u043c\u0430\u043a\u0441 {} \u0442\u043e\u0432\u0430\u0440\u0456\u0432/\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044e)...".format(max_products))
         if apify:
-            roz_data = apify.get_rozetka_products(codes, max_per_category=max_products)
+            try:
+                roz_data = apify.get_rozetka_products(codes, max_per_category=max_products)
+            except Exception as e:
+                st.warning(f"\u26a0\ufe0f Apify Rozetka: {e}")
+                roz_data = pd.DataFrame()
         if roz_data.empty:
             roz = RozetkaScraper()
             roz_data = roz.get_top_products(codes, max_per_category=max_products)
@@ -392,7 +396,11 @@ def do_collect(selected, period, use_gt, use_roz, use_prom,
     if use_prom:
         progress.progress(70, text="\U0001f6d2 Prom.ua...")
         if apify:
-            prom_data = apify.get_prom_products(codes, max_per_category=max_products)
+            try:
+                prom_data = apify.get_prom_products(codes, max_per_category=max_products)
+            except Exception as e:
+                st.warning(f"\u26a0\ufe0f Apify Prom: {e}")
+                prom_data = pd.DataFrame()
         if prom_data.empty:
             prom = PromScraper()
             prom_data = prom.get_top_products(codes, max_per_category=max_products)
