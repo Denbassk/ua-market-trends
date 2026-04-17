@@ -213,40 +213,34 @@ def main():
         '<p class="main-header">\U0001f1fa\U0001f1e6 UA Market Trends Analyzer</p>',
         unsafe_allow_html=True
     )
+
 # --- AUTH ---
 def check_password():
-    """Simple password protection."""
     if st.session_state.get("authenticated"):
         return True
 
-    with st.container():
-        st.markdown("## \U0001f512 \u0412\u0445\u0456\u0434")
-        username = st.text_input("\u041b\u043e\u0433\u0456\u043d", key="login_user")
-        password = st.text_input("\u041f\u0430\u0440\u043e\u043b\u044c", type="password", key="login_pass")
+    st.markdown("## \U0001f512 \u0412\u0445\u0456\u0434")
+    username = st.text_input("\u041b\u043e\u0433\u0456\u043d", key="login_user")
+    password = st.text_input("\u041f\u0430\u0440\u043e\u043b\u044c", type="password", key="login_pass")
 
-        if st.button("\u0412\u0432\u0456\u0439\u0442\u0438", key="login_btn"):
-            config_path = "config_auth.yaml"
-            if os.path.exists(config_path):
-                with open(config_path, encoding="utf-8") as f:
-                    config = yaml.load(f, Loader=SafeLoader)
-
-                users = config.get("credentials", {}).get("usernames", {})
-                user_data = users.get(username)
-
-                if user_data:
-                    import bcrypt
-                    stored_hash = user_data["password"]
-                    if bcrypt.checkpw(password.encode(), stored_hash.encode()):
-                        st.session_state["authenticated"] = True
-                        st.session_state["name"] = user_data.get("name", username)
-                        st.rerun()
-                    else:
-                        st.error("\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c")
+    if st.button("\u0412\u0432\u0456\u0439\u0442\u0438", key="login_btn"):
+        config_path = "config_auth.yaml"
+        if os.path.exists(config_path):
+            with open(config_path, encoding="utf-8") as f:
+                cfg = yaml.load(f, Loader=SafeLoader)
+            users = cfg.get("credentials", {}).get("usernames", {})
+            user_data = users.get(username)
+            if user_data:
+                import bcrypt
+                if bcrypt.checkpw(password.encode(), user_data["password"].encode()):
+                    st.session_state["authenticated"] = True
+                    st.session_state["name"] = user_data.get("name", username)
+                    st.rerun()
                 else:
-                    st.error("\u041a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430 \u043d\u0435 \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u043e")
+                    st.error("\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c")
             else:
-                st.error("\u0424\u0430\u0439\u043b config_auth.yaml \u043d\u0435 \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u043e")
-        return False
+                st.error("\u041a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430 \u043d\u0435 \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u043e")
+    return False
 
 if not check_password():
     st.stop()
