@@ -90,14 +90,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 CATEGORIES = {
-    "\U0001f35e \u041f\u0440\u043e\u0434\u0443\u043a\u0442\u0438 \u0445\u0430\u0440\u0447\u0443\u0432\u0430\u043d\u043d\u044f": "food",
-    "\U0001f3e0 \u0422\u043e\u0432\u0430\u0440\u0438 \u0434\u043b\u044f \u0434\u043e\u043c\u0443": "home",
-    "\U0001f484 \u041a\u043e\u0441\u043c\u0435\u0442\u0438\u043a\u0430": "cosmetics",
-    "\U0001f4f1 \u0415\u043b\u0435\u043a\u0442\u0440\u043e\u043d\u0456\u043a\u0430": "electronics",
-    "\U0001f476 \u0414\u0438\u0442\u044f\u0447\u0456 \u0442\u043e\u0432\u0430\u0440\u0438": "kids",
-    "\U0001f43e \u0417\u043e\u043e\u0442\u043e\u0432\u0430\u0440\u0438": "pets",
-    "\U0001f50b \u0415\u043d\u0435\u0440\u0433\u043e\u0430\u0432\u0442\u043e\u043d\u043e\u043c\u043d\u0456\u0441\u0442\u044c": "energy",
-    "\U0001f48a \u0417\u0434\u043e\u0440\u043e\u0432'\u044f": "health",
+    "🍽 Їжа та алкоголь (все)": "food",
+    "🥃 Алкогольні напої": "alcohol",
+    "🛒 Продукти харчування": "grocery",
+    "🧴 Побутова хімія": "chemistry",
+    "🏠 Товари для дому": "home",
+    "💄 Косметика": "cosmetics",
+    "📱 Електроніка": "electronics",
+    "👶 Дитячі товари": "kids",
+    "🐾 Зоотовари": "pets",
+    "💊 Здоров'я та спорт": "health",
+    "🔋 Зарядні станції": "energy",
 }
 
 PERIOD_MAP = {
@@ -274,7 +277,7 @@ def page_collect():
         selected = st.multiselect(
             "\U0001f4c2 \u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0457:",
             options=list(CATEGORIES.keys()),
-            default=[list(CATEGORIES.keys())[0], list(CATEGORIES.keys())[1]]
+            default=[list(CATEGORIES.keys())[0], list(CATEGORIES.keys())[1], list(CATEGORIES.keys())[2], list(CATEGORIES.keys())[3]]
         )
 
         time_period = st.selectbox(
@@ -449,141 +452,293 @@ def do_collect(selected, period, use_gt, use_roz, use_prom,
 
 
 # =============================================
-# PAGE: Product Analytics
+# PAGE: Analytics (з трендовим скорингом)
 # =============================================
 def page_analytics():
-    st.header("\U0001f4ca \u0410\u043d\u0430\u043b\u0456\u0442\u0438\u043a\u0430 \u0442\u043e\u0432\u0430\u0440\u0456\u0432")
+    st.header("📊 Аналітика трендів")
 
-    # Load from cache
     df = get_cached_products()
 
     if df.empty:
-        st.warning(
-            "\u041d\u0435\u043c\u0430\u0454 \u0434\u0430\u043d\u0438\u0445. "
-            "\u041f\u0435\u0440\u0435\u0439\u0434\u0456\u0442\u044c \u0443 "
-            "'\u0417\u0456\u0431\u0440\u0430\u0442\u0438 \u0434\u0430\u043d\u0456' \u0441\u043f\u043e\u0447\u0430\u0442\u043a\u0443."
-        )
+        st.warning("Немає даних. Перейдіть у 'Зібрати дані' спочатку.")
         return
 
-    # ---- FILTERS ----
-    st.subheader("\U0001f50d \u0424\u0456\u043b\u044c\u0442\u0440\u0438")
+    # ---- Рахуємо trend_score для всіх товарів ----
+    analyzer = TrendAnalyzer()
+    scored_df = analyzer.calculate_trend_scores(df)
 
-    fc1, fc2, fc3, fc4 = st.columns(4)
-
-    with fc1:
-        cats = ["(\u0432\u0441\u0456)"] + sorted(df["category"].unique().tolist())
-        sel_cat = st.selectbox("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044f:", cats)
-
-    with fc2:
-        sources = ["(\u0432\u0441\u0456)"] + sorted(df["source"].unique().tolist())
-        sel_src = st.selectbox("\u0414\u0436\u0435\u0440\u0435\u043b\u043e:", sources)
-
-    with fc3:
-        price_range = st.slider(
-            "\u0426\u0456\u043d\u0430 (\u20b4):",
-            min_value=0,
-            max_value=int(df["price"].max()) + 1 if df["price"].max() > 0 else 100,
-            value=(0, int(df["price"].max()) + 1 if df["price"].max() > 0 else 100)
-        )
-
-    with fc4:
-        min_rating = st.slider("\u041c\u0456\u043d. \u0440\u0435\u0439\u0442\u0438\u043d\u0433:", 0.0, 5.0, 0.0, 0.1)
-
-    # Search
-    search = st.text_input(
-        "\U0001f50e \u041f\u043e\u0448\u0443\u043a \u0437\u0430 \u043d\u0430\u0437\u0432\u043e\u044e:",
-        placeholder="\u0432\u0432\u0435\u0434\u0456\u0442\u044c \u043d\u0430\u0437\u0432\u0443 \u0442\u043e\u0432\u0430\u0440\u0443..."
-    )
-
-    # Apply filters
-    filtered = df.copy()
-    if sel_cat != "(\u0432\u0441\u0456)":
-        filtered = filtered[filtered["category"] == sel_cat]
-    if sel_src != "(\u0432\u0441\u0456)":
-        filtered = filtered[filtered["source"] == sel_src]
-    filtered = filtered[
-        (filtered["price"] >= price_range[0]) &
-        (filtered["price"] <= price_range[1])
-    ]
-    if min_rating > 0:
-        filtered = filtered[filtered["rating"] >= min_rating]
-    if search:
-        filtered = filtered[
-            filtered["name"].str.contains(search, case=False, na=False)
-        ]
-
-    # Remove duplicates by name
-    filtered = filtered.drop_duplicates(subset=["name"], keep="first")
-
-    # ---- SORT ----
-    sort_options = {
-        "\u0420\u0435\u0439\u0442\u0438\u043d\u0433 \u2b07": ("rating", False),
-        "\u0412\u0456\u0434\u0433\u0443\u043a\u0438 \u2b07": ("reviews_count", False),
-        "\u0426\u0456\u043d\u0430 \u2b06": ("price", True),
-        "\u0426\u0456\u043d\u0430 \u2b07": ("price", False),
-        "\u041d\u0430\u0437\u0432\u0430 A-Z": ("name", True),
-    }
-    sort_label = st.selectbox(
-        "\u0421\u043e\u0440\u0442\u0443\u0432\u0430\u043d\u043d\u044f:",
-        list(sort_options.keys())
-    )
-    sort_col, sort_asc = sort_options[sort_label]
-    if sort_col in filtered.columns:
-        filtered = filtered.sort_values(sort_col, ascending=sort_asc)
-
-    # ---- STATS ----
-    st.divider()
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.metric(
-            "\U0001f4e6 \u0422\u043e\u0432\u0430\u0440\u0456\u0432",
-            len(filtered)
-        )
-    with c2:
-        avg_price = filtered["price"].mean() if len(filtered) > 0 else 0
-        st.metric(
-            "\U0001f4b0 \u0421\u0435\u0440. \u0446\u0456\u043d\u0430",
-            "{:.0f} \u20b4".format(avg_price)
-        )
-    with c3:
-        avg_rating = filtered["rating"].mean() if len(filtered) > 0 else 0
-        st.metric(
-            "\u2b50 \u0421\u0435\u0440. \u0440\u0435\u0439\u0442\u0438\u043d\u0433",
-            "{:.1f}".format(avg_rating)
-        )
-    with c4:
-        med_price = filtered["price"].median() if len(filtered) > 0 else 0
-        st.metric(
-            "\U0001f4ca \u041c\u0435\u0434\u0456\u0430\u043d\u0430 \u0446\u0456\u043d\u0438",
-            "{:.0f} \u20b4".format(med_price)
-        )
-    with c5:
-        cats_count = filtered["category"].nunique() if len(filtered) > 0 else 0
-        st.metric(
-            "\U0001f4c2 \u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u0439",
-            cats_count
-        )
-
-    # ---- CHARTS ----
-    st.divider()
-
-    chart_tab1, chart_tab2, chart_tab3 = st.tabs([
-        "\U0001f4ca \u0413\u0440\u0430\u0444\u0456\u043a\u0438",
-        "\U0001f4cb \u0422\u0430\u0431\u043b\u0438\u0446\u044f",
-        "\U0001f3c6 \u0422\u043e\u043f-20 \u043a\u0430\u0440\u0442\u043a\u0438",
+    # ---- TABS ----
+    tab_hot, tab_brands, tab_drops, tab_categories, tab_charts, tab_table, tab_recs = st.tabs([
+        "🔥 Гарячі товари",
+        "🏷 Трендові бренди",
+        "💰 Великі знижки",
+        "📂 Категорії",
+        "📊 Графіки",
+        "📋 Таблиця",
+        "💡 Рекомендації",
     ])
 
-    with chart_tab1:
-        render_charts(filtered)
+    # ===========================================================
+    # TAB 1: Гарячі товари (топ за trend_score)
+    # ===========================================================
+    with tab_hot:
+        st.subheader("🔥 Найтрендовіші товари зараз")
+        st.caption(
+            "Trend Score = популярність (кількість відгуків) × якість (рейтинг) × знижка. "
+            "Чим вищий бал — тим більш затребуваний товар."
+        )
 
-    with chart_tab2:
-        render_table(filtered)
+        # Фільтри для гарячих
+        fh1, fh2, fh3 = st.columns(3)
+        with fh1:
+            hot_cats = ["(всі)"] + sorted(scored_df["category"].unique().tolist())
+            hot_cat = st.selectbox("Категорія:", hot_cats, key="hot_cat")
+        with fh2:
+            hot_n = st.select_slider("Кількість:", options=[10, 20, 50, 100], value=20, key="hot_n")
+        with fh3:
+            min_reviews = st.number_input("Мін. відгуків:", min_value=0, value=5, step=5, key="hot_minrev")
 
-    with chart_tab3:
-        render_cards(filtered)
+        hot_df = scored_df.copy()
+        if hot_cat != "(всі)":
+            hot_df = hot_df[hot_df["category"] == hot_cat]
+        hot_df = hot_df[hot_df["reviews_count"] >= min_reviews]
+        hot_df = hot_df.head(hot_n)
+
+        if hot_df.empty:
+            st.info("Немає товарів з такими фільтрами.")
+        else:
+            # Метрики зверху
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                st.metric("🔥 Макс. Score", f"{hot_df['trend_score'].max():.0f}")
+            with m2:
+                st.metric("⭐ Сер. рейтинг", f"{hot_df['rating'].mean():.1f}")
+            with m3:
+                st.metric("💬 Сер. відгуків", f"{hot_df['reviews_count'].mean():.0f}")
+            with m4:
+                avg_p = hot_df['price'].mean()
+                st.metric("💰 Сер. ціна", f"{avg_p:,.0f} ₴")
+
+            # Bar chart — топ товари за score
+            chart_df = hot_df.head(20).copy()
+            chart_df["short_name"] = chart_df["name"].str[:40] + "..."
+            fig = px.bar(
+                chart_df, x="trend_score", y="short_name", orientation="h",
+                color="trend_score",
+                color_continuous_scale=["#3b82f6", "#f59e0b", "#ef4444"],
+                hover_data=["name", "price", "rating", "reviews_count", "brand"],
+                title="🔥 Топ товарів за Trend Score",
+                labels={"trend_score": "Trend Score", "short_name": ""},
+                template="plotly_dark",
+            )
+            fig.update_layout(height=max(400, len(chart_df) * 28), yaxis=dict(autorange="reversed"))
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Картки товарів
+            st.divider()
+            for idx, (_, row) in enumerate(hot_df.head(20).iterrows()):
+                with st.container():
+                    a, b, c, d, e = st.columns([4, 1, 1, 1, 1])
+                    with a:
+                        name = row.get("name", "N/A")
+                        brand = row.get("brand", "")
+                        label = row.get("trend_label", "")
+                        st.markdown(f"**{idx+1}. {label} {name}**")
+                        parts = []
+                        if brand and str(brand) != "nan" and len(str(brand)) > 1:
+                            parts.append(str(brand))
+                        roz_cat = row.get("rozetka_category", "")
+                        if roz_cat and str(roz_cat) != "nan":
+                            parts.append(str(roz_cat))
+                        else:
+                            parts.append(str(row.get("category", "")))
+                        st.caption(" | ".join(parts))
+                    with b:
+                        score = float(row.get("trend_score", 0))
+                        st.metric("Score", f"{score:.0f}")
+                    with c:
+                        p = float(row.get("price", 0) or 0)
+                        old_p = float(row.get("old_price", 0) or 0)
+                        try:
+                            delta_val = f"-{old_p - p:.0f} ₴" if old_p > p else None
+                        except (ValueError, TypeError):
+                            delta_val = None
+                        st.metric("Ціна", f"{p:.0f} ₴", delta=delta_val, delta_color="normal")
+                    with d:
+                        r = float(row.get("rating", 0) or 0)
+                        st.metric("Рейтинг", f"⭐ {r:.1f}" if r > 0 else "-")
+                    with e:
+                        rv = int(float(row.get("reviews_count", 0) or 0))
+                        st.metric("Відгуки", f"{rv:,}".replace(",", " ") if rv > 0 else "-")
+                    st.divider()
+
+    # ===========================================================
+    # TAB 2: Трендові бренди
+    # ===========================================================
+    with tab_brands:
+        st.subheader("🏷 Трендові бренди")
+        st.caption("Бренди відсортовані за середнім Trend Score їхніх товарів.")
+
+        brands_df = analyzer.get_trending_brands(df, top_n=20)
+
+        if brands_df.empty:
+            st.info("Немає даних про бренди.")
+        else:
+            # Bar chart
+            fig_b = px.bar(
+                brands_df, x="avg_score", y="brand", orientation="h",
+                color="avg_score",
+                color_continuous_scale=["#6366f1", "#f59e0b", "#ef4444"],
+                hover_data=["total_reviews", "avg_rating", "products_count", "avg_price"],
+                title="Середній Trend Score за брендами",
+                labels={"avg_score": "Сер. Trend Score", "brand": ""},
+                template="plotly_dark",
+            )
+            fig_b.update_layout(height=max(400, len(brands_df) * 28), yaxis=dict(autorange="reversed"))
+            st.plotly_chart(fig_b, use_container_width=True)
+
+            # Таблиця брендів
+            st.dataframe(
+                brands_df,
+                use_container_width=True,
+                column_config={
+                    "brand": st.column_config.TextColumn("Бренд"),
+                    "avg_score": st.column_config.NumberColumn("Trend Score", format="%.1f"),
+                    "total_reviews": st.column_config.NumberColumn("Всього відгуків"),
+                    "avg_rating": st.column_config.NumberColumn("Сер. рейтинг", format="%.1f"),
+                    "products_count": st.column_config.NumberColumn("Товарів"),
+                    "avg_price": st.column_config.NumberColumn("Сер. ціна ₴", format="%.0f"),
+                },
+            )
+
+    # ===========================================================
+    # TAB 3: Великі знижки (цінові аномалії)
+    # ===========================================================
+    with tab_drops:
+        st.subheader("💰 Товари з великими знижками")
+        st.caption(
+            "Великі знижки = магазин активно просуває товар. "
+            "Це сигнал конкуренції або сезонного попиту."
+        )
+
+        min_disc = st.slider("Мін. знижка (%):", 10, 70, 20, 5, key="min_disc")
+        drops_df = analyzer.get_price_drops(df, min_discount_pct=min_disc)
+
+        if drops_df.empty:
+            st.info(f"Немає товарів зі знижкою ≥ {min_disc}%.")
+        else:
+            st.success(f"Знайдено **{len(drops_df)}** товарів зі знижкою ≥ {min_disc}%")
+
+            # Scatter: знижка vs кількість відгуків
+            drops_plot = drops_df.head(100).copy()
+            drops_plot["reviews_count"] = pd.to_numeric(drops_plot["reviews_count"], errors="coerce").fillna(1)
+            fig_d = px.scatter(
+                drops_plot, x="discount_pct", y="reviews_count",
+                size="reviews_count", color="discount_pct",
+                color_continuous_scale=["#22c55e", "#ef4444"],
+                hover_name="name",
+                hover_data=["price", "old_price", "rating", "brand"],
+                title="Знижка (%) vs Популярність",
+                labels={"discount_pct": "Знижка %", "reviews_count": "Відгуків"},
+                template="plotly_dark",
+            )
+            st.plotly_chart(fig_d, use_container_width=True)
+
+            # Таблиця
+            show_cols = ["name", "price", "old_price", "discount_pct", "rating", "reviews_count", "brand", "category"]
+            show_cols = [c for c in show_cols if c in drops_df.columns]
+            st.dataframe(
+                drops_df[show_cols].head(50),
+                use_container_width=True,
+                column_config={
+                    "name": st.column_config.TextColumn("Назва", width="large"),
+                    "price": st.column_config.NumberColumn("Ціна ₴", format="%.0f"),
+                    "old_price": st.column_config.NumberColumn("Стара ціна ₴", format="%.0f"),
+                    "discount_pct": st.column_config.NumberColumn("Знижка %", format="%.1f"),
+                    "rating": st.column_config.NumberColumn("Рейтинг", format="%.1f"),
+                    "reviews_count": st.column_config.NumberColumn("Відгуків"),
+                    "brand": st.column_config.TextColumn("Бренд"),
+                    "category": st.column_config.TextColumn("Категорія"),
+                },
+            )
+
+    # ===========================================================
+    # TAB 4: Категорії
+    # ===========================================================
+    with tab_categories:
+        st.subheader("📂 Аналіз категорій")
+
+        cats_df = analyzer.get_trending_categories(df)
+
+        if cats_df.empty:
+            st.info("Немає даних по категоріях.")
+        else:
+            # Bubble chart
+            cats_df["products_count"] = pd.to_numeric(cats_df["products_count"], errors="coerce").fillna(1)
+            fig_c = px.scatter(
+                cats_df, x="avg_price", y="avg_score",
+                size="products_count", color="avg_score",
+                color_continuous_scale=["#6366f1", "#f59e0b", "#ef4444"],
+                hover_name="category_name",
+                hover_data=["total_reviews", "avg_rating", "products_count", "max_discount_pct"],
+                title="Категорії: Ціна vs Trend Score (розмір = кількість товарів)",
+                labels={"avg_price": "Сер. ціна ₴", "avg_score": "Trend Score"},
+                template="plotly_dark",
+            )
+            fig_c.update_layout(height=500)
+            st.plotly_chart(fig_c, use_container_width=True)
+
+            # Таблиця категорій
+            st.dataframe(
+                cats_df,
+                use_container_width=True,
+                column_config={
+                    "category_name": st.column_config.TextColumn("Категорія", width="large"),
+                    "avg_score": st.column_config.NumberColumn("Trend Score", format="%.1f"),
+                    "total_reviews": st.column_config.NumberColumn("Відгуків"),
+                    "avg_rating": st.column_config.NumberColumn("Рейтинг", format="%.1f"),
+                    "products_count": st.column_config.NumberColumn("Товарів"),
+                    "avg_price": st.column_config.NumberColumn("Сер. ціна ₴", format="%.0f"),
+                    "max_discount_pct": st.column_config.NumberColumn("Сер. знижка %", format="%.1f"),
+                },
+            )
+
+    # ===========================================================
+    # TAB 5: Графіки (оригінальні)
+    # ===========================================================
+    with tab_charts:
+        st.subheader("📊 Загальні графіки")
+        render_charts(scored_df)
+
+    # ===========================================================
+    # TAB 6: Таблиця (з trend_score)
+    # ===========================================================
+    with tab_table:
+        st.subheader("📋 Всі товари")
+        render_table(scored_df)
+
+    # ===========================================================
+    # TAB 7: Рекомендації
+    # ===========================================================
+    with tab_recs:
+        st.subheader("💡 Рекомендації для бізнесу")
+        gt_data = st.session_state.get("gt_data", pd.DataFrame())
+        recs = analyzer.generate_recommendations(gt_data, df)
+
+        for rec in recs:
+            priority = rec.get("priority", "medium")
+            icon = "🔴" if priority == "high" else "🟡"
+            with st.expander(f"{icon} {rec['title']}", expanded=(priority == 'high')):
+                st.write(rec["description"])
+                if rec.get("keywords"):
+                    st.markdown("**Ключові позиції:** " + ", ".join(str(k) for k in rec["keywords"]))
+                if rec.get("action"):
+                    st.info(f"📌 Дія: {rec['action']}")
 
 
+# =============================================
+# HELPER: Charts
+# =============================================
 def render_charts(df):
     if df.empty:
         return
@@ -591,27 +746,36 @@ def render_charts(df):
     c1, c2 = st.columns(2)
 
     with c1:
-        # Price distribution
         fig = px.histogram(
             df, x="price", nbins=40,
-            title="\U0001f4b0 \u0420\u043e\u0437\u043f\u043e\u0434\u0456\u043b \u0446\u0456\u043d",
-            labels={"price": "\u0426\u0456\u043d\u0430 (\u20b4)", "count": "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c"},
+            title="💰 Розподіл цін",
+            labels={"price": "Ціна (₴)", "count": "Кількість"},
             color_discrete_sequence=["#667eea"],
             template="plotly_dark"
         )
         st.plotly_chart(fig, use_container_width=True)
 
     with c2:
-        # By category
         if "category" in df.columns:
             cat_counts = df["category"].value_counts().reset_index()
             cat_counts.columns = ["category", "count"]
             fig2 = px.pie(
                 cat_counts, names="category", values="count",
-                title="\U0001f4c2 \u0422\u043e\u0432\u0430\u0440\u0438 \u0437\u0430 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044f\u043c\u0438",
+                title="📂 Товари за категоріями",
                 template="plotly_dark"
             )
             st.plotly_chart(fig2, use_container_width=True)
+
+    # Trend Score distribution
+    if "trend_score" in df.columns:
+        fig_ts = px.histogram(
+            df, x="trend_score", nbins=30,
+            color="trend_label" if "trend_label" in df.columns else None,
+            title="🔥 Розподіл Trend Score",
+            labels={"trend_score": "Trend Score", "count": "Кількість"},
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig_ts, use_container_width=True)
 
     # Price vs Rating scatter
     if "rating" in df.columns and df["rating"].sum() > 0:
@@ -620,151 +784,62 @@ def render_charts(df):
             fig3 = px.scatter(
                 df_rated, x="price", y="rating",
                 size="reviews_count" if "reviews_count" in df_rated.columns else None,
-                color="category",
+                color="trend_score" if "trend_score" in df_rated.columns else "category",
+                color_continuous_scale=["#3b82f6", "#f59e0b", "#ef4444"],
                 hover_name="name",
-                title="\u0426\u0456\u043d\u0430 vs \u0420\u0435\u0439\u0442\u0438\u043d\u0433",
-                labels={
-                    "price": "\u0426\u0456\u043d\u0430 (\u20b4)",
-                    "rating": "\u0420\u0435\u0439\u0442\u0438\u043d\u0433",
-                    "reviews_count": "\u0412\u0456\u0434\u0433\u0443\u043a\u0438"
-                },
+                title="Ціна vs Рейтинг (колір = Trend Score)",
+                labels={"price": "Ціна (₴)", "rating": "Рейтинг"},
                 template="plotly_dark"
             )
             st.plotly_chart(fig3, use_container_width=True)
 
-    # Top brands
-    if "brand" in df.columns:
-        brands = df[df["brand"].astype(str).str.len() > 1]
-        if not brands.empty:
-            top_brands = brands["brand"].value_counts().head(15).reset_index()
-            top_brands.columns = ["brand", "count"]
-            fig4 = px.bar(
-                top_brands, x="count", y="brand", orientation="h",
-                title="\U0001f3c6 \u0422\u043e\u043f-15 \u0431\u0440\u0435\u043d\u0434\u0456\u0432",
-                labels={"count": "\u041a\u0456\u043b\u044c\u043a\u0456\u0441\u0442\u044c", "brand": ""},
-                color="count", color_continuous_scale="Viridis",
-                template="plotly_dark"
-            )
-            st.plotly_chart(fig4, use_container_width=True)
 
-    # Category comparison
-    if "category" in df.columns:
-        cat_stats = df.groupby("category").agg(
-            count=("name", "count"),
-            avg_price=("price", "mean"),
-            avg_rating=("rating", "mean"),
-            max_price=("price", "max"),
-            min_price=("price", "min"),
-        ).reset_index()
-
-        fig5 = px.bar(
-            cat_stats, x="category", y="avg_price",
-            title="\u0421\u0435\u0440\u0435\u0434\u043d\u044f \u0446\u0456\u043d\u0430 \u0437\u0430 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044f\u043c\u0438",
-            labels={"avg_price": "\u0421\u0435\u0440. \u0446\u0456\u043d\u0430 (\u20b4)", "category": ""},
-            color="avg_rating", color_continuous_scale="RdYlGn",
-            template="plotly_dark"
-        )
-        st.plotly_chart(fig5, use_container_width=True)
-
-
+# =============================================
+# HELPER: Table
+# =============================================
 def render_table(df):
     if df.empty:
         return
 
-    # Items per page
     per_page = st.selectbox(
-        "\u0422\u043e\u0432\u0430\u0440\u0456\u0432 \u043d\u0430 \u0441\u0442\u043e\u0440\u0456\u043d\u0446\u0456:",
-        [25, 50, 100, 200, 500],
-        index=1,
-        key="items_per_page"
+        "Товарів на сторінці:", [25, 50, 100, 200, 500],
+        index=1, key="items_per_page"
     )
 
     total = len(df)
     total_pages = max(1, (total + per_page - 1) // per_page)
-
     page_num = st.number_input(
-        "\u0421\u0442\u043e\u0440\u0456\u043d\u043a\u0430:",
-        min_value=1, max_value=total_pages, value=1, key="page_num"
+        "Сторінка:", min_value=1, max_value=total_pages, value=1, key="page_num"
     )
 
     start = (page_num - 1) * per_page
     end = start + per_page
     page_df = df.iloc[start:end]
 
-    st.caption(
-        "\u041f\u043e\u043a\u0430\u0437\u0430\u043d\u043e {}-{} \u0437 {} \u0442\u043e\u0432\u0430\u0440\u0456\u0432 "
-        "| \u0421\u0442\u043e\u0440\u0456\u043d\u043a\u0430 {}/{}".format(
-            start + 1, min(end, total), total, page_num, total_pages
-        )
-    )
+    st.caption(f"Показано {start+1}-{min(end, total)} з {total} товарів | Сторінка {page_num}/{total_pages}")
 
-    # Show columns
-    display_cols = ["name", "price", "rating", "reviews_count", "category", "source"]
-    if "brand" in page_df.columns:
-        display_cols.insert(2, "brand")
-
+    display_cols = ["name", "trend_score", "trend_label", "price", "old_price",
+                    "rating", "reviews_count", "brand", "category", "rozetka_category", "source"]
     show_cols = [c for c in display_cols if c in page_df.columns]
+
     st.dataframe(
         page_df[show_cols],
         use_container_width=True,
         height=600,
         column_config={
-            "name": st.column_config.TextColumn("\u041d\u0430\u0437\u0432\u0430", width="large"),
-            "price": st.column_config.NumberColumn("\u0426\u0456\u043d\u0430 \u20b4", format="%.0f"),
-            "rating": st.column_config.NumberColumn("\u0420\u0435\u0439\u0442\u0438\u043d\u0433", format="%.1f"),
-            "reviews_count": st.column_config.NumberColumn("\u0412\u0456\u0434\u0433\u0443\u043a\u0438"),
-            "category": st.column_config.TextColumn("\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0456\u044f"),
-            "brand": st.column_config.TextColumn("\u0411\u0440\u0435\u043d\u0434"),
-            "source": st.column_config.TextColumn("\u0414\u0436\u0435\u0440\u0435\u043b\u043e"),
+            "name": st.column_config.TextColumn("Назва", width="large"),
+            "trend_score": st.column_config.NumberColumn("🔥 Score", format="%.0f"),
+            "trend_label": st.column_config.TextColumn("Тренд"),
+            "price": st.column_config.NumberColumn("Ціна ₴", format="%.0f"),
+            "old_price": st.column_config.NumberColumn("Стара ₴", format="%.0f"),
+            "rating": st.column_config.NumberColumn("Рейтинг", format="%.1f"),
+            "reviews_count": st.column_config.NumberColumn("Відгуки"),
+            "brand": st.column_config.TextColumn("Бренд"),
+            "category": st.column_config.TextColumn("Категорія"),
+            "rozetka_category": st.column_config.TextColumn("Rozetka"),
+            "source": st.column_config.TextColumn("Джерело"),
         }
     )
-
-
-def render_cards(df):
-    if df.empty:
-        return
-
-    st.caption(
-        "\u0422\u043e\u043f-20 \u0442\u043e\u0432\u0430\u0440\u0456\u0432 \u0437\u0430 \u043e\u0431\u0440\u0430\u043d\u0438\u043c \u0441\u043e\u0440\u0442\u0443\u0432\u0430\u043d\u043d\u044f\u043c"
-    )
-
-    for idx, (_, row) in enumerate(df.head(20).iterrows()):
-        with st.container():
-            a, b, c, d = st.columns([4, 1, 1, 1])
-            with a:
-                name = row.get("name", "N/A")
-                brand = row.get("brand", "")
-                source = row.get("source", "")
-                st.markdown("**{}. {}**".format(idx + 1, name))
-                parts = []
-                if brand and str(brand) != "nan" and len(str(brand)) > 1:
-                    parts.append(str(brand))
-                parts.append(str(row.get("category", "")))
-                parts.append(str(source))
-                st.caption(" | ".join(parts))
-            with b:
-                p = float(row.get("price", 0) or 0)
-                old_p = float(row.get("old_price", 0) or 0)
-                try:
-                    delta_val = "-{:.0f} \u20b4".format(old_p - p) if old_p > p else None
-                except (ValueError, TypeError):
-                    delta_val = None
-                st.metric(
-                    "\u0426\u0456\u043d\u0430",
-                    "{:.0f} \u20b4".format(p),
-                    delta=delta_val,
-                    delta_color="normal"
-                )
-            with c:
-                r = float(row.get("rating", 0) or 0)
-                st.metric("\u0420\u0435\u0439\u0442\u0438\u043d\u0433", "\u2b50 {:.1f}".format(r) if r > 0 else "-")
-            with d:
-                rv = int(float(row.get("reviews_count", 0) or 0))
-                st.metric(
-                    "\u0412\u0456\u0434\u0433\u0443\u043a\u0438",
-                    "{:,}".format(rv).replace(",", " ") if rv > 0 else "-"
-                )
-            st.divider()
 
 
 # =============================================
