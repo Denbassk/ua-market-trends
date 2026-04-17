@@ -1,0 +1,7 @@
+__pycache__/
+data/
+.streamlit/secrets.toml
+*.pyc
+*.db
+.env
+check_db.py

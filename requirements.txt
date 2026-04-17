@@ -1,0 +1,9 @@
+streamlit==1.45.0
+pytrends==4.9.2
+plotly==6.0.1
+pandas==2.2.3
+requests==2.32.3
+beautifulsoup4==4.12.3
+lxml==5.3.1
+altair==5.5.0
+schedule==1.2.2
