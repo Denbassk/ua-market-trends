@@ -778,49 +778,237 @@ def render_charts(df):
         fig = px.histogram(
             df, x="price", nbins=40,
             title="💰 Розподіл цін",
-            labels={"price": "Ціна (₴)", "count": "Кількість"},
+            labels={"price": "Ціна (₴)", "count": "Кількість товарів"},
             color_discrete_sequence=["#667eea"],
             template="plotly_dark"
+        )
+        fig.update_layout(
+            yaxis_title="Кількість товарів",
+            xaxis_title="Ціна (₴)",
+            height=400,
         )
         st.plotly_chart(fig, use_container_width=True)
 
     with c2:
         if "category" in df.columns:
             cat_counts = df["category"].value_counts().reset_index()
-            cat_counts.columns = ["category", "count"]
+            cat_counts.columns = ["Категорія", "Кількість"]
+            # Замінюємо англійські коди на українські
+            cat_names = {
+                "food": "🍽 Їжа та алкоголь",
+                "alcohol": "🥃 Алкоголь",
+                "grocery": "🛒 Продукти",
+                "chemistry": "🧴 Побут. хімія",
+                "home": "🏠 Дім",
+                "cosmetics": "💄 Косметика",
+                "electronics": "📱 Електроніка",
+                "kids": "👶 Дитячі",
+                "pets": "🐾 Зоотовари",
+                "health": "💊 Здоров'я",
+                "energy": "🔋 Зарядні",
+                "other": "📦 Інше",
+                "mixed": "📦 Змішане",
+            }
+            cat_counts["Категорія"] = cat_counts["Категорія"].map(
+                lambda x: cat_names.get(x, x)
+            )
             fig2 = px.pie(
-                cat_counts, names="category", values="count",
+                cat_counts, names="Категорія", values="Кількість",
                 title="📂 Товари за категоріями",
                 template="plotly_dark"
             )
+            fig2.update_layout(height=400)
+            fig2.update_traces(textposition="inside", textinfo="percent+label")
             st.plotly_chart(fig2, use_container_width=True)
 
-    # Trend Score distribution
+    # Розподіл Trend Score
     if "trend_score" in df.columns:
+        trend_labels_map = {
+            "🔵 Низький": "🔵 Низький",
+            "🟡 Середній": "🟡 Середній",
+            "🟠 Високий": "🟠 Високий",
+            "🔴 Гарячий": "🔴 Гарячий",
+        }
         fig_ts = px.histogram(
             df, x="trend_score", nbins=30,
             color="trend_label" if "trend_label" in df.columns else None,
             title="🔥 Розподіл Trend Score",
-            labels={"trend_score": "Trend Score", "count": "Кількість"},
-            template="plotly_dark"
+            labels={
+                "trend_score": "Trend Score (бали)",
+                "count": "Кількість товарів",
+                "trend_label": "Рівень тренду",
+            },
+            category_orders={"trend_label": ["🔵 Низький", "🟡 Середній", "🟠 Високий", "🔴 Гарячий"]},
+            color_discrete_map={
+                "🔵 Низький": "#6366f1",
+                "🟡 Середній": "#22c55e",
+                "🟠 Високий": "#f59e0b",
+                "🔴 Гарячий": "#ef4444",
+            },
+            template="plotly_dark",
+        )
+        fig_ts.update_layout(
+            yaxis_title="Кількість товарів",
+            xaxis_title="Trend Score (бали)",
+            height=400,
+            legend_title_text="Рівень тренду",
         )
         st.plotly_chart(fig_ts, use_container_width=True)
 
-    # Price vs Rating scatter
+    # Ціна vs Рейтинг (з фільтрами)
     if "rating" in df.columns and df["rating"].sum() > 0:
+        st.divider()
+        st.markdown("#### 💎 Ціна vs Рейтинг")
+
         df_rated = df[df["rating"] > 0].copy()
         if not df_rated.empty:
-            fig3 = px.scatter(
-                df_rated, x="price", y="rating",
-                size="reviews_count" if "reviews_count" in df_rated.columns else None,
-                color="trend_score" if "trend_score" in df_rated.columns else "category",
-                color_continuous_scale=["#3b82f6", "#f59e0b", "#ef4444"],
-                hover_name="name",
-                title="Ціна vs Рейтинг (колір = Trend Score)",
-                labels={"price": "Ціна (₴)", "rating": "Рейтинг"},
-                template="plotly_dark"
+            # Фільтри
+            sf1, sf2, sf3 = st.columns(3)
+            with sf1:
+                cat_names_scatter = {
+                    "food": "🍽 Їжа та алкоголь", "alcohol": "🥃 Алкоголь",
+                    "grocery": "🛒 Продукти", "chemistry": "🧴 Побут. хімія",
+                    "home": "🏠 Дім", "cosmetics": "💄 Косметика",
+                    "electronics": "📱 Електроніка", "kids": "👶 Дитячі",
+                    "pets": "🐾 Зоотовари", "health": "💊 Здоров'я",
+                    "energy": "🔋 Зарядні", "other": "📦 Інше", "mixed": "📦 Змішане",
+                }
+                available_cats = sorted(df_rated["category"].unique().tolist())
+                cat_options = {cat_names_scatter.get(c, c): c for c in available_cats}
+                selected_cats = st.multiselect(
+                    "Категорії:",
+                    options=list(cat_options.keys()),
+                    default=list(cat_options.keys()),
+                    key="scatter_cats"
+                )
+                selected_codes = [cat_options[c] for c in selected_cats]
+
+            with sf2:
+                price_max = int(df_rated["price"].max()) + 1
+                scatter_price = st.slider(
+                    "Ціна (₴):",
+                    0, min(price_max, 50000),
+                    (0, min(5000, price_max)),
+                    key="scatter_price"
+                )
+
+            with sf3:
+                scatter_top = st.select_slider(
+                    "Показати товарів:",
+                    options=[50, 100, 200, 500, 1000],
+                    value=200,
+                    key="scatter_top"
+                )
+
+            # Застосовуємо фільтри
+            plot_df = df_rated[df_rated["category"].isin(selected_codes)].copy()
+            plot_df = plot_df[
+                (plot_df["price"] >= scatter_price[0]) &
+                (plot_df["price"] <= scatter_price[1])
+            ]
+            if "trend_score" in plot_df.columns:
+                plot_df = plot_df.sort_values("trend_score", ascending=False)
+            plot_df = plot_df.head(scatter_top)
+
+            if plot_df.empty:
+                st.info("Немає товарів з такими фільтрами.")
+            else:
+                st.caption(f"Показано {len(plot_df)} товарів")
+
+                # Додаємо українські назви категорій для легенди
+                plot_df["Категорія"] = plot_df["category"].map(
+                    lambda x: cat_names_scatter.get(x, x)
+                )
+                plot_df["_size"] = plot_df["reviews_count"].clip(lower=10)
+
+                fig3 = px.scatter(
+                    plot_df, x="price", y="rating",
+                    size="_size",
+                    size_max=25,
+                    color="Категорія",
+                    hover_name="name",
+                    hover_data={
+                        "price": ":.0f",
+                        "rating": ":.1f",
+                        "reviews_count": True,
+                        "brand": True,
+                        "trend_score": ":.0f" if "trend_score" in plot_df.columns else False,
+                        "_size": False,
+                        "Категорія": False,
+                    },
+                    title=f"Ціна vs Рейтинг (розмір = відгуки, топ-{scatter_top})",
+                    labels={
+                        "price": "Ціна (₴)",
+                        "rating": "Рейтинг ⭐",
+                        "reviews_count": "Відгуків",
+                        "brand": "Бренд",
+                        "trend_score": "Score",
+                    },
+                    template="plotly_dark",
+                )
+                fig3.update_layout(
+                    height=600,
+                    legend_title_text="Категорія",
+                    legend=dict(font=dict(size=12)),
+                )
+                fig3.update_traces(
+                    marker=dict(opacity=0.75, line=dict(width=0.5, color="white"))
+                )
+                st.plotly_chart(fig3, use_container_width=True)
+
+    # Топ бренди
+    if "brand" in df.columns:
+        brands = df[df["brand"].astype(str).str.len() > 1]
+        if not brands.empty:
+            top_brands = brands["brand"].value_counts().head(15).reset_index()
+            top_brands.columns = ["Бренд", "Кількість"]
+            fig4 = px.bar(
+                top_brands, x="Кількість", y="Бренд", orientation="h",
+                title="🏆 Топ-15 брендів за кількістю товарів",
+                labels={"Кількість": "Кількість товарів", "Бренд": ""},
+                color="Кількість",
+                color_continuous_scale="Viridis",
+                template="plotly_dark",
             )
-            st.plotly_chart(fig3, use_container_width=True)
+            fig4.update_layout(
+                height=500,
+                yaxis=dict(autorange="reversed"),
+                coloraxis_showscale=False,
+            )
+            st.plotly_chart(fig4, use_container_width=True)
+
+    # Середня ціна за категоріями
+    if "category" in df.columns:
+        cat_names = {
+            "food": "🍽 Їжа", "alcohol": "🥃 Алкоголь", "grocery": "🛒 Продукти",
+            "chemistry": "🧴 Хімія", "home": "🏠 Дім", "cosmetics": "💄 Косметика",
+            "electronics": "📱 Електроніка", "kids": "👶 Дитячі", "pets": "🐾 Зоотовари",
+            "health": "💊 Здоров'я", "energy": "🔋 Зарядні", "other": "📦 Інше",
+            "mixed": "📦 Змішане",
+        }
+        cat_stats = df.copy()
+        cat_stats["cat_label"] = cat_stats["category"].map(lambda x: cat_names.get(x, x))
+        cat_stats = cat_stats.groupby("cat_label").agg(
+            avg_price=("price", "mean"),
+            avg_rating=("rating", "mean"),
+            count=("name", "count"),
+        ).reset_index()
+
+        fig5 = px.bar(
+            cat_stats, x="cat_label", y="avg_price",
+            title="📊 Середня ціна за категоріями",
+            labels={"avg_price": "Середня ціна (₴)", "cat_label": "Категорія", "avg_rating": "Рейтинг"},
+            color="avg_rating",
+            color_continuous_scale="RdYlGn",
+            hover_data={"count": True, "avg_rating": ":.1f"},
+            template="plotly_dark",
+        )
+        fig5.update_layout(
+            height=450,
+            xaxis_title="",
+            coloraxis_colorbar_title_text="Сер. рейтинг",
+        )
+        st.plotly_chart(fig5, use_container_width=True)
 
 
 # =============================================
