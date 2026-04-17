@@ -743,19 +743,23 @@ def render_cards(df):
                 parts.append(str(source))
                 st.caption(" | ".join(parts))
             with b:
-                p = row.get("price", 0)
-                old_p = row.get("old_price", 0)
+                p = float(row.get("price", 0) or 0)
+                old_p = float(row.get("old_price", 0) or 0)
+                try:
+                    delta_val = "-{:.0f} \u20b4".format(old_p - p) if old_p > p else None
+                except (ValueError, TypeError):
+                    delta_val = None
                 st.metric(
                     "\u0426\u0456\u043d\u0430",
                     "{:.0f} \u20b4".format(p),
-                    delta="-{:.0f} \u20b4".format(old_p - p) if old_p > p else None,
+                    delta=delta_val,
                     delta_color="normal"
                 )
             with c:
-                r = row.get("rating", 0)
+                r = float(row.get("rating", 0) or 0)
                 st.metric("\u0420\u0435\u0439\u0442\u0438\u043d\u0433", "\u2b50 {:.1f}".format(r) if r > 0 else "-")
             with d:
-                rv = row.get("reviews_count", 0)
+                rv = int(float(row.get("reviews_count", 0) or 0))
                 st.metric(
                     "\u0412\u0456\u0434\u0433\u0443\u043a\u0438",
                     "{:,}".format(rv).replace(",", " ") if rv > 0 else "-"
