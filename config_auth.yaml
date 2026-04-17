@@ -3,7 +3,7 @@ credentials:
     admin:
       email: your_email@gmail.com
       name: Admin
-      password: "$2b$12$KkOtuCXiC5YLEu0KwMMyfOEE7IpClGbjdXsPAgWLxp5XPfC1w0gT2"
+      password: "$2b$12$mf2pyPMd1.OQw/5jeRSwp.6AQJ19IAoryatZPqstlTqhk0CTjoQ22"
 
 cookie:
   expiry_days: 30
