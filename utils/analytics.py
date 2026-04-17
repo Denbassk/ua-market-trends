@@ -121,28 +121,43 @@ class TrendAnalyzer:
         cat_col = "rozetka_category" if "rozetka_category" in scored.columns else "category"
         cats = scored[scored[cat_col].notna() & (scored[cat_col] != "")].copy()
         if cats.empty:
+            # Fallback на category
+            cat_col = "category"
+            cats = scored[scored[cat_col].notna() & (scored[cat_col] != "")].copy()
+        if cats.empty:
             return pd.DataFrame()
 
-        result = cats.groupby(cat_col).agg(
-            avg_score=("trend_score", "mean"),
-            total_reviews=("reviews_count", "sum"),
-            avg_rating=("rating", "mean"),
-            products_count=("name", "count"),
-            avg_price=("price", "mean"),
-            max_discount_pct=("old_price", lambda x: 0),  # placeholder
-        ).round(1)
+        # Рахуємо знижку заздалегідь для кожного товару
+        cats["price"] = pd.to_numeric(cats.get("price", 0), errors="coerce").fillna(0)
+        cats["old_price"] = pd.to_numeric(cats.get("old_price", 0), errors="coerce").fillna(0)
 
-        # Реальний розрахунок знижки
-        for cat_name in result.index:
-            cat_df = cats[cats[cat_col] == cat_name]
-            has_discount = cat_df[(cat_df["old_price"] > cat_df["price"]) & (cat_df["price"] > 0)]
+        groups = []
+        for cat_name, group in cats.groupby(cat_col):
+            avg_score = group["trend_score"].mean()
+            total_reviews = group["reviews_count"].sum()
+            avg_rating = group["rating"].mean()
+            products_count = len(group)
+            avg_price = group["price"].mean()
+
+            # Середня знижка
+            has_discount = group[(group["old_price"] > group["price"]) & (group["price"] > 0)]
             if not has_discount.empty:
-                discount_pct = ((has_discount["old_price"] - has_discount["price"]) / has_discount["old_price"] * 100)
-                result.loc[cat_name, "max_discount_pct"] = round(discount_pct.mean(), 1)
+                discount_pct = ((has_discount["old_price"] - has_discount["price"]) / has_discount["old_price"] * 100).mean()
+            else:
+                discount_pct = 0.0
 
-        result = result.sort_values("avg_score", ascending=False)
-        result = result.reset_index()
-        result.rename(columns={cat_col: "category_name"}, inplace=True)
+            groups.append({
+                "category_name": cat_name,
+                "avg_score": round(avg_score, 1),
+                "total_reviews": int(total_reviews),
+                "avg_rating": round(avg_rating, 1),
+                "products_count": int(products_count),
+                "avg_price": round(avg_price, 1),
+                "max_discount_pct": round(discount_pct, 1),
+            })
+
+        result = pd.DataFrame(groups)
+        result = result.sort_values("avg_score", ascending=False).reset_index(drop=True)
         return result
 
     # =============================================================
