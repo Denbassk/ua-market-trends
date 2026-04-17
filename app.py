@@ -25,7 +25,6 @@ except ImportError:
 # =============================================
 import yaml
 from yaml.loader import SafeLoader
-import streamlit_authenticator as stauth
 
 st.set_page_config(
     page_title="UA Market Trends",
@@ -215,29 +214,47 @@ def main():
         unsafe_allow_html=True
     )
 # --- AUTH ---
-config_path = "config_auth.yaml"
-if os.path.exists(config_path):
-    with open(config_path, encoding="utf-8") as f:
-        config = yaml.load(f, Loader=SafeLoader)
+def check_password():
+    """Simple password protection."""
+    if st.session_state.get("authenticated"):
+        return True
 
-    authenticator = stauth.Authenticate(
-        config["credentials"],
-        config["cookie"]["name"],
-        config["cookie"]["key"],
-        config["cookie"]["expiry_days"],
-    )
+    with st.container():
+        st.markdown("## \U0001f512 \u0412\u0445\u0456\u0434")
+        username = st.text_input("\u041b\u043e\u0433\u0456\u043d", key="login_user")
+        password = st.text_input("\u041f\u0430\u0440\u043e\u043b\u044c", type="password", key="login_pass")
 
-    authenticator.login()
+        if st.button("\u0412\u0432\u0456\u0439\u0442\u0438", key="login_btn"):
+            config_path = "config_auth.yaml"
+            if os.path.exists(config_path):
+                with open(config_path, encoding="utf-8") as f:
+                    config = yaml.load(f, Loader=SafeLoader)
 
-    if not st.session_state.get("authentication_status"):
-        if st.session_state.get("authentication_status") is False:
-            st.error("\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043b\u043e\u0433\u0456\u043d/\u043f\u0430\u0440\u043e\u043b\u044c")
-        else:
-            st.warning("\u0412\u0432\u0435\u0434\u0456\u0442\u044c \u043b\u043e\u0433\u0456\u043d \u0442\u0430 \u043f\u0430\u0440\u043e\u043b\u044c")
-        st.stop()
+                users = config.get("credentials", {}).get("usernames", {})
+                user_data = users.get(username)
 
-    authenticator.logout("\u0412\u0438\u0439\u0442\u0438", "sidebar")
-    st.sidebar.write(f'\u041f\u0440\u0438\u0432\u0456\u0442, **{st.session_state.get("name", "")}**')
+                if user_data:
+                    import bcrypt
+                    stored_hash = user_data["password"]
+                    if bcrypt.checkpw(password.encode(), stored_hash.encode()):
+                        st.session_state["authenticated"] = True
+                        st.session_state["name"] = user_data.get("name", username)
+                        st.rerun()
+                    else:
+                        st.error("\u041d\u0435\u0432\u0456\u0440\u043d\u0438\u0439 \u043f\u0430\u0440\u043e\u043b\u044c")
+                else:
+                    st.error("\u041a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0430 \u043d\u0435 \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u043e")
+            else:
+                st.error("\u0424\u0430\u0439\u043b config_auth.yaml \u043d\u0435 \u0437\u043d\u0430\u0439\u0434\u0435\u043d\u043e")
+        return False
+
+if not check_password():
+    st.stop()
+
+st.sidebar.write(f'\u041f\u0440\u0438\u0432\u0456\u0442, **{st.session_state.get("name", "")}**')
+if st.sidebar.button("\u0412\u0438\u0439\u0442\u0438"):
+    st.session_state["authenticated"] = False
+    st.rerun()
 # --- END AUTH ---
 
     # SIDEBAR
