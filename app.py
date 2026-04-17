@@ -159,26 +159,55 @@ def get_cache_stats():
 
 
 def save_products_to_cache(df, source):
-    """Save products to local cache."""
+    """Save products to local cache with ALL fields."""
     if df.empty:
         return
     os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
+
+    # Переконаємось що таблиця має всі колонки
+    try:
+        conn.execute("ALTER TABLE product_snapshots ADD COLUMN old_price REAL DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE product_snapshots ADD COLUMN image TEXT DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE product_snapshots ADD COLUMN brand TEXT DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE product_snapshots ADD COLUMN seller TEXT DEFAULT ''")
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE product_snapshots ADD COLUMN rozetka_category TEXT DEFAULT ''")
+    except Exception:
+        pass
+
     now = datetime.now().isoformat()
     for _, row in df.iterrows():
         try:
             conn.execute(
                 "INSERT INTO product_snapshots "
-                "(source, name, price, rating, reviews_count, category, url, collected_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(source, name, price, old_price, rating, reviews_count, "
+                "category, rozetka_category, url, image, brand, seller, collected_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     source,
                     str(row.get("name", "")),
                     float(row.get("price", 0) or 0),
+                    float(row.get("old_price", 0) or 0),
                     float(row.get("rating", 0) or 0),
-                    int(row.get("reviews_count", 0) or 0),
+                    int(float(row.get("reviews_count", 0) or 0)),
                     str(row.get("category", "")),
+                    str(row.get("rozetka_category", "")),
                     str(row.get("url", "")),
+                    str(row.get("image", "")),
+                    str(row.get("brand", "")),
+                    str(row.get("seller", "")),
                     now,
                 )
             )
