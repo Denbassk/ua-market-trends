@@ -5,3 +5,6 @@ data/
 *.db
 .env
 check_db.py
+
+check_*.py
+test_*.py
