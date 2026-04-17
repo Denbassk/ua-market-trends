@@ -66,11 +66,14 @@ def get_apify_client():
 
 class ApifyCollector:
     def __init__(self, api_token=None):
+        self.available = False
         if api_token:
             from apify_client import ApifyClient
             self.client = ApifyClient(api_token)
+            self.available = True
         else:
             self.client = get_apify_client()
+            self.available = self.client is not None
 
     ROZETKA_CATEGORY_URLS = {
         "food": "https://rozetka.com.ua/supermarket/c4626923/",
@@ -83,31 +86,18 @@ class ApifyCollector:
         "health": "https://rozetka.com.ua/zdorove-i-sport/c4627858/",
     }
 
-    def __init__(self, api_token):
-        self.api_token = api_token
-        self.client = None
-        try:
-            from apify_client import ApifyClient
-            self.client = ApifyClient(api_token)
-            self.available = True
-        except ImportError:
-            st.error("apify-client \u043d\u0435 \u0432\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u043e. \u0412\u0438\u043a\u043e\u043d\u0430\u0439\u0442\u0435: pip install apify-client")
-            self.available = False
-        except Exception as e:
-            st.error("Apify \u043f\u043e\u043c\u0438\u043b\u043a\u0430: {}".format(e))
-            self.available = False
 
     # ===========================================
     # ROZETKA
     # ===========================================
-def get_rozetka_products(self, category_codes, max_per_category=50):
-    """Fetch products from Rozetka via Apify actor."""
-    all_products = []
+    def get_rozetka_products(self, category_codes, max_per_category=50):
+        """Fetch products from Rozetka via Apify actor."""
+        all_products = []
 
-    for code in category_codes:
-        url = self.ROZETKA_CATEGORY_URLS.get(code)
-        if not url:
-            continue
+        for code in category_codes:
+            url = self.ROZETKA_CATEGORY_URLS.get(code)
+            if not url:
+                continue
 
         st.info(f"\U0001f6d2 Rozetka [{code}]: \u0437\u0431\u0438\u0440\u0430\u0454\u043c\u043e \u0434\u043e {max_per_category} \u0442\u043e\u0432\u0430\u0440\u0456\u0432...")
 
@@ -140,7 +130,7 @@ def get_rozetka_products(self, category_codes, max_per_category=50):
         except Exception as e:
             st.warning(f"\u26a0\ufe0f Rozetka [{code}]: {e}")
 
-    return pd.DataFrame(all_products) if all_products else pd.DataFrame()
+        return pd.DataFrame(all_products) if all_products else pd.DataFrame()
 
 def _safe_parse_rozetka(self, item, category_code):
     """Parse one Rozetka product from Apify dataset."""
