@@ -344,6 +344,18 @@ def page_collect():
 
     st.divider()
 
+    # --- Load from Apify cache ---
+    if APIFY_AVAILABLE and use_apify and (apify_token or saved_token):
+        token = apify_token or saved_token
+        if st.button("\U0001f4e6 \u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0438\u0442\u0438 \u0437 \u043e\u0441\u0442\u0430\u043d\u043d\u044c\u043e\u0433\u043e \u0437\u0430\u043f\u0443\u0441\u043a\u0443 Apify (\u0431\u0435\u0437 \u0432\u0438\u0442\u0440\u0430\u0442)", use_container_width=True):
+            apify = ApifyCollector(token)
+            cached = apify.get_last_dataset(max_items=max_products * len(selected))
+            if not cached.empty:
+                save_products_to_cache(cached, "rozetka")
+                st.success("\u2705 \u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e {} \u0442\u043e\u0432\u0430\u0440\u0456\u0432 \u0443 \u0431\u0430\u0437\u0443".format(len(cached)))
+                st.rerun()
+    # --- End cache ---
+
     if st.button(
         "\U0001f680 \u0417\u0456\u0431\u0440\u0430\u0442\u0438 \u0434\u0430\u043d\u0456",
         type="primary", use_container_width=True
